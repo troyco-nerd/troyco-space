@@ -1,0 +1,69 @@
+---
+import { getCollection } from 'astro:content';
+import Layout from '../layouts/Layout.astro';
+import { formatDate } from '../utils/formatDate';
+
+const posts = (await getCollection('blog', ({ data }) => !data.draft))
+  .sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf())
+  .slice(0, 3);
+
+const projects = (await getCollection('projects', ({ data }) => !data.draft))
+  .sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf())
+  .slice(0, 3);
+---
+
+<Layout>
+  <main class="page narrow">
+    <div class="intro">
+      <h1>Hey, I&rsquo;m Troy.</h1>
+      <p>
+        This is my little corner of the internet — a blog, a home for side
+        projects, and a place to experiment out loud. No agenda, just
+        building things and writing about it.
+      </p>
+    </div>
+
+    <section>
+      <div class="section-heading">
+        <h2>Latest posts</h2>
+        <a href="/blog/">All posts &rarr;</a>
+      </div>
+      {posts.length === 0 ? (
+        <p class="entry-desc">Nothing published yet — check back soon.</p>
+      ) : (
+        <ul class="entry-list">
+          {posts.map((post) => (
+            <li>
+              <h3 class="entry-title">
+                <a href={`/blog/${post.id}/`}>{post.data.title}</a>
+              </h3>
+              <p class="entry-meta">{formatDate(post.data.pubDate)}</p>
+              <p class="entry-desc">{post.data.description}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+
+    <section>
+      <div class="section-heading">
+        <h2>Projects</h2>
+        <a href="/projects/">All projects &rarr;</a>
+      </div>
+      {projects.length === 0 ? (
+        <p class="entry-desc">Nothing here yet — first project coming soon.</p>
+      ) : (
+        <ul class="entry-list">
+          {projects.map((project) => (
+            <li>
+              <h3 class="entry-title">
+                <a href={`/projects/${project.id}/`}>{project.data.title}</a>
+              </h3>
+              <p class="entry-desc">{project.data.description}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  </main>
+</Layout>

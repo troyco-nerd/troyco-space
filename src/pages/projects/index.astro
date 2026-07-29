@@ -1,0 +1,35 @@
+---
+import { getCollection } from 'astro:content';
+import Layout from '../../layouts/Layout.astro';
+
+const projects = (await getCollection('projects', ({ data }) => !data.draft)).sort(
+  (a, b) => b.data.date.valueOf() - a.data.date.valueOf()
+);
+---
+
+<Layout title="Projects" description="Things I've built and experiments in progress.">
+  <main class="page narrow">
+    <h1>Projects</h1>
+    {projects.length === 0 ? (
+      <p class="entry-desc">Nothing here yet — first project coming soon.</p>
+    ) : (
+      <ul class="entry-list">
+        {projects.map((project) => (
+          <li>
+            <h2 class="entry-title">
+              <a href={`/projects/${project.id}/`}>{project.data.title}</a>
+            </h2>
+            <p class="entry-desc">{project.data.description}</p>
+            {project.data.tags.length > 0 && (
+              <ul class="tag-list">
+                {project.data.tags.map((tag) => (
+                  <li class="tag">{tag}</li>
+                ))}
+              </ul>
+            )}
+          </li>
+        ))}
+      </ul>
+    )}
+  </main>
+</Layout>

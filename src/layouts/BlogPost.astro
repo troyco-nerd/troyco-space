@@ -1,0 +1,40 @@
+---
+import Layout from './Layout.astro';
+import { formatDate } from '../utils/formatDate';
+
+interface Props {
+  title: string;
+  description: string;
+  pubDate: Date;
+  updatedDate?: Date;
+  tags?: string[];
+}
+
+const { title, description, pubDate, updatedDate, tags = [] } = Astro.props;
+---
+
+<Layout title={title} description={description}>
+  <main class="page narrow">
+    <article>
+      <header class="post-header">
+        <h1>{title}</h1>
+        <p class="entry-meta">
+          <time datetime={pubDate.toISOString()}>{formatDate(pubDate)}</time>
+          {updatedDate && (
+            <>
+              {' '}&middot; updated <time datetime={updatedDate.toISOString()}>{formatDate(updatedDate)}</time>
+            </>
+          )}
+        </p>
+        {tags.length > 0 && (
+          <ul class="tag-list">
+            {tags.map((tag) => (
+              <li class="tag">{tag}</li>
+            ))}
+          </ul>
+        )}
+      </header>
+      <slot />
+    </article>
+  </main>
+</Layout>

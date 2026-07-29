@@ -1,0 +1,40 @@
+---
+import { getCollection, render } from 'astro:content';
+import Layout from '../../layouts/Layout.astro';
+import { formatDate } from '../../utils/formatDate';
+
+export async function getStaticPaths() {
+  const projects = await getCollection('projects', ({ data }) => !data.draft);
+  return projects.map((project) => ({
+    params: { slug: project.id },
+    props: { project },
+  }));
+}
+
+const { project } = Astro.props;
+const { Content } = await render(project);
+---
+
+<Layout title={project.data.title} description={project.data.description}>
+  <main class="page narrow">
+    <article>
+      <header class="post-header">
+        <h1>{project.data.title}</h1>
+        <p class="entry-meta">{formatDate(project.data.date)}</p>
+        <p>
+          {project.data.url && <a href={project.data.url}>Live site &rarr;</a>}
+          {project.data.url && project.data.repo && ' · '}
+          {project.data.repo && <a href={project.data.repo}>Source &rarr;</a>}
+        </p>
+        {project.data.tags.length > 0 && (
+          <ul class="tag-list">
+            {project.data.tags.map((tag) => (
+              <li class="tag">{tag}</li>
+            ))}
+          </ul>
+        )}
+      </header>
+      <Content />
+    </article>
+  </main>
+</Layout>
