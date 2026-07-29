@@ -14,5 +14,8 @@
     "astro": "^7.1.6",
     "@astrojs/rss": "^4.0.19",
     "@astrojs/sitemap": "^3.7.3"
+  },
+  "devDependencies": {
+    "wrangler": "^4.115.0"
   }
 }
