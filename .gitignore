@@ -16,3 +16,7 @@ npm-debug.log*
 
 # macOS-specific files
 .DS_Store
+
+# local wrangler secrets for dev testing
+.dev.vars
+.wrangler/
