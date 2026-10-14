@@ -339,7 +339,7 @@ function renderLogin(error) {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
-<title>Admin Login · Troy Co</title>
+<title>Admin Login · Troy Coroles</title>
 <style>${PAGE_STYLE}</style>
 </head><body>
 <div class="panel">
@@ -376,7 +376,7 @@ function renderEditor(opts = {}) {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
-<title>New Post · Troy Co Admin</title>
+<title>New Post · Troy Coroles Admin</title>
 <style>${PAGE_STYLE}</style>
 </head><body>
 <div class="panel wide">
