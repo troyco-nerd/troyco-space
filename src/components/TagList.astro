@@ -1,0 +1,26 @@
+---
+import { tagSlug } from '../utils/tags';
+
+interface Props {
+  tags: string[];
+}
+
+const { tags } = Astro.props;
+---
+
+{tags.length > 0 && (
+  <ul class="tag-list">
+    {tags.map((tag) => {
+      const slug = tagSlug(tag);
+      return (
+        <li>
+          {slug ? (
+            <a class="tag" href={`/tags/${slug}/`}>{tag}</a>
+          ) : (
+            <span class="tag">{tag}</span>
+          )}
+        </li>
+      );
+    })}
+  </ul>
+)}

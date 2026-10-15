@@ -10,6 +10,8 @@
 //   ADMIN_PASSWORD  — the password for /admin (also used to sign session cookies)
 //   GITHUB_TOKEN     — a fine-grained GitHub PAT with Contents: Read & write on this repo
 
+import { recordHit, loadStats, renderStatsBody, STATS_STYLE, STATS_SCRIPT } from './stats.js';
+
 const REPO_OWNER = 'troyco-nerd';
 const REPO_NAME = 'troyco-space';
 const BRANCH = 'main';
@@ -38,6 +40,12 @@ export default {
       }
       if (url.pathname === '/api/upload' && request.method === 'POST') {
         return handleUpload(request, env);
+      }
+      if (url.pathname === '/api/hit' && request.method === 'POST') {
+        return handleHit(request, env, ctx);
+      }
+      if (url.pathname === '/admin/stats' && request.method === 'GET') {
+        return handleStats(request, env, url);
       }
     } catch (err) {
       return new Response(`Internal error: ${err && err.message ? err.message : String(err)}`, { status: 500 });
@@ -211,6 +219,33 @@ async function handlePublish(request, env) {
       success: `Published! Committed to <code>${escapeHtml(path)}</code> on <code>main</code> — Cloudflare will build and deploy automatically, live at <a href="${liveUrl}">${liveUrl}</a> in about a minute.`,
     })
   );
+}
+
+// ---------------------------------------------------------------------
+// Visitor stats (the counting + page live in stats.js)
+// ---------------------------------------------------------------------
+
+// The page beacon. Always answers 204: it never needs a reply, and nothing about
+// whether a visit was counted is revealed to the caller.
+async function handleHit(request, env, ctx) {
+  await recordHit(request, env, ctx, await isAuthed(request, env));
+  return new Response(null, { status: 204, headers: { 'cache-control': 'no-store' } });
+}
+
+async function handleStats(request, env, url) {
+  if (!(await isAuthed(request, env))) {
+    return redirect('/admin');
+  }
+  const asked = Number(url.searchParams.get('days'));
+  const days = [7, 30, 90].includes(asked) ? asked : 30;
+  let data = null;
+  let error = '';
+  try {
+    data = await loadStats(env, days);
+  } catch (err) {
+    error = `Couldn't read the stats database: ${err && err.message ? err.message : err}`;
+  }
+  return htmlResponse(renderStatsPage(data, days, error));
 }
 
 // ---------------------------------------------------------------------
@@ -480,6 +515,11 @@ const PAGE_STYLE = `
   .success code{background:#050608;padding:.1em .4em;border-radius:2px;}
   .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:1.25rem;}
   .topbar form{margin:0;}
+  .topbar-actions{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:.6rem 1.1rem;}
+  .admin-nav{display:flex;gap:1rem;}
+  .admin-nav a{font-family:'Michroma',sans-serif;font-size:.55rem;letter-spacing:.16em;text-transform:uppercase;text-decoration:none;color:var(--muted);padding:.3rem 0;border-bottom:2px solid transparent;}
+  .admin-nav a:hover{color:#fff;}
+  .admin-nav a[aria-current="page"]{color:#fff;border-bottom-color:var(--gold);}
   .topbar button{margin:0;font-size:.5rem;padding:.6rem 1rem;background:rgba(255,214,10,.1);color:var(--gold);}
   .topbar button:hover{background:var(--gold);color:#000;filter:none;}
   [hidden]{display:none !important;}
@@ -834,6 +874,36 @@ function renderLogin(error) {
 </body></html>`;
 }
 
+// Page title, the Editor | Stats links, and Log Out.
+function adminTopbar(title, current) {
+  const link = (href, id, label) =>
+    `<a href="${href}"${current === id ? ' aria-current="page"' : ''}>${label}</a>`;
+  return `<div class="topbar">
+    <h1>${escapeHtml(title)}</h1>
+    <div class="topbar-actions">
+      <nav class="admin-nav" aria-label="Admin">${link('/admin/editor', 'editor', 'Editor')}${link('/admin/stats', 'stats', 'Stats')}</nav>
+      <form method="POST" action="/admin/logout"><button type="submit">Log Out</button></form>
+    </div>
+  </div>`;
+}
+
+function renderStatsPage(data, days, error) {
+  return `<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Visitor stats · Troy Coroles Admin</title>
+<style>${PAGE_STYLE}${STATS_STYLE}</style>
+</head><body>
+<div class="panel wide">
+  ${adminTopbar('Visitor stats', 'stats')}
+  ${error ? `<div class="error">${escapeHtml(error)}</div>` : renderStatsBody(data, days)}
+</div>
+<script>${STATS_SCRIPT}</script>
+</body></html>`;
+}
+
 function renderEditor(opts = {}) {
   const { error, success } = opts;
   const v = Object.assign(
@@ -861,10 +931,7 @@ function renderEditor(opts = {}) {
 <style>${PAGE_STYLE}</style>
 </head><body>
 <div class="panel wide">
-  <div class="topbar">
-    <h1>New Post</h1>
-    <form method="POST" action="/admin/logout"><button type="submit">Log Out</button></form>
-  </div>
+  ${adminTopbar('New Post', 'editor')}
   ${error ? `<div class="error">${escapeHtml(error)}</div>` : ''}
   ${success ? `<div class="success">${success}</div>` : ''}
   <form method="POST" action="/api/publish">

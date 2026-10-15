@@ -456,9 +456,11 @@ main.page.narrow {
 }
 
 .entry-list > li {
+  --pad-x: 1.6rem;
+  --pad-y: 1.3rem;
   position: relative;
   isolation: isolate;
-  padding: 1.3rem 1.6rem 1.35rem;
+  padding: var(--pad-y) var(--pad-x) calc(var(--pad-y) + 0.05rem);
   background: linear-gradient(
     135deg,
     rgba(197, 203, 211, 0.5),
@@ -516,6 +518,43 @@ main.page.narrow {
   box-shadow: inset 0 0 36px rgba(255, 214, 10, 0.1);
 }
 
+/* Featured image across the top of a card. It bleeds out to the card's 1px
+   edge (hence the negative margins) and gets the same corner cut. */
+.entry-list > li .card-media {
+  position: relative;
+  display: block;
+  margin: calc(1px - var(--pad-y)) calc(1px - var(--pad-x)) 1.1rem;
+  overflow: hidden;
+  clip-path: polygon(0 0, calc(100% - var(--cut-in)) 0, 100% var(--cut-in), 100% 100%, 0 100%);
+}
+
+.card-media img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1200 / 630;
+  object-fit: cover;
+  border: 0;
+  border-radius: 0;
+  filter: brightness(0.9) saturate(0.95);
+  transition: transform 0.5s ease, filter 0.3s ease;
+}
+
+/* Fade the bottom of the picture into the card */
+.card-media::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 45%;
+  background: linear-gradient(transparent, var(--panel-soft));
+  pointer-events: none;
+}
+
+.entry-list > li:hover .card-media img {
+  transform: scale(1.04);
+  filter: none;
+}
+
 .entry-title {
   display: block;
   font-size: 0.88rem;
@@ -565,6 +604,7 @@ main.page.narrow {
 }
 
 .tag {
+  display: inline-block;
   font-family: var(--font-display);
   font-size: 0.52rem;
   letter-spacing: 0.14em;
@@ -580,6 +620,44 @@ main.page.narrow {
     6px 100%,
     0 calc(100% - 6px)
   );
+}
+
+/* Tags are links to /tags/<name>/ */
+a.tag {
+  text-decoration: none;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+a.tag:hover {
+  color: #fff;
+  background: rgba(159, 216, 255, 0.22);
+  text-shadow: none;
+}
+
+.tag .count {
+  margin-left: 0.35em;
+  color: var(--gold);
+}
+
+.tag-browse {
+  margin: -0.25rem 0 1.75rem;
+}
+
+.tag-browse .tag-list,
+.tag-cloud {
+  margin-top: 0.25rem;
+}
+
+.crumb {
+  margin: 0 0 1rem;
+  font-family: var(--font-display);
+  font-size: 0.55rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.crumb a {
+  text-decoration: none;
 }
 
 .post-header {
@@ -667,7 +745,8 @@ main.page.narrow {
   }
 
   .entry-list > li {
-    padding: 1.15rem 1.2rem 1.2rem;
+    --pad-x: 1.2rem;
+    --pad-y: 1.15rem;
   }
 }
 

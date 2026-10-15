@@ -1,0 +1,33 @@
+---
+import TagList from './TagList.astro';
+import { formatDate } from '../utils/formatDate';
+
+// One card in a list of posts or projects. Renders an <li>, so put it inside
+// <ul class="entry-list">. If the entry has a featured image it is shown across
+// the top of the card.
+interface Props {
+  href: string;
+  title: string;
+  description: string;
+  date?: Date;
+  tags?: string[];
+  image?: string;
+  as?: 'h2' | 'h3';
+}
+
+const { href, title, description, date, tags = [], image, as: Heading = 'h2' } = Astro.props;
+---
+
+<li>
+  {image && (
+    <a href={href} class="card-media" tabindex="-1" aria-hidden="true">
+      <img src={image} alt="" width="1200" height="630" loading="lazy" decoding="async" />
+    </a>
+  )}
+  <Heading class="entry-title">
+    <a href={href}>{title}</a>
+  </Heading>
+  {date && <p class="entry-meta">{formatDate(date)}</p>}
+  <p class="entry-desc">{description}</p>
+  <TagList tags={tags} />
+</li>

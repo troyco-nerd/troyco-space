@@ -32,6 +32,8 @@ preview shows its title, description and a picture.
   click **Use as featured** next to an image you already added to the post. It's
   cropped to 1200×630 (the shape previews use) and saved as a small JPEG. The
   preview in the editor shows exactly what will be shared.
+- The featured image is also shown across the top of that post's card on the
+  home, blog, projects and tag pages.
 - Leave it empty and the site logo card (`public/og-default.jpg`) is used.
 - Writing by hand? Add `image: "/images/posts/your-image.jpg"` to the post's
   front matter. Best: a 1200×630 JPEG under 300 KB (WhatsApp and some other
@@ -39,6 +41,39 @@ preview shows its title, description and a picture.
 - Apps cache previews. To see a changed image, test the link in Facebook's
   Sharing Debugger or LinkedIn's Post Inspector; iMessage may need a fresh
   message. Plain SMS (not iMessage/RCS) never shows previews, only the link.
+
+## Tags
+
+Every tag on a post or project is a link to `/tags/<tag>/`, a page listing all
+the posts and projects with that tag (drafts never appear). `/tags/` lists every
+tag, and the blog page has a "browse by tag" row. "AI", "ai" and "Ai" are the
+same tag. Nothing to set up: add tags when you publish.
+
+## Visitor stats (private)
+
+`/admin/stats` (log in first) shows page views, visitors, a daily chart, top
+pages, where visitors come from, countries and devices. Visitors never see any
+of it. The Editor and Stats links are at the top of the admin.
+
+- **How it works:** every public page sends a tiny anonymous beacon to
+  `/api/hit` (in `src/layouts/Layout.astro`); `worker/stats.js` stores one row per
+  visit in a Cloudflare D1 database.
+- **Privacy:** no cookies, and no IP addresses or browser strings are stored. A
+  "visitor" is a salted hash that changes every day. Not counted: you while
+  logged in to `/admin`, bots, browsers sending Do Not Track / Global Privacy
+  Control, reloads of the same page within 30 minutes, and `*.workers.dev`
+  preview addresses. Days are UTC.
+- **Turning it on (one time):** the stats need a D1 database bound as `DB`. Add
+  this to `wrangler.jsonc` and Cloudflare creates the database on the next deploy:
+
+  ```jsonc
+  "d1_databases": [{ "binding": "DB", "database_name": "troyco-stats" }]
+  ```
+
+  Until then the Stats page says it isn't switched on, and nothing is recorded.
+- **Housekeeping:** rows older than about 13 months are deleted automatically,
+  and the free D1 allowance (100,000 writes a day) is far more than a personal
+  site needs. `npm run dev` doesn't run the worker, so there are no stats locally.
 
 ## Branding
 

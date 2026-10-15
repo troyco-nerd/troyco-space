@@ -1,5 +1,6 @@
 ---
 import Layout from './Layout.astro';
+import TagList from '../components/TagList.astro';
 import { formatDate } from '../utils/formatDate';
 
 interface Props {
@@ -27,13 +28,7 @@ const { title, description, pubDate, updatedDate, tags = [], image } = Astro.pro
             </>
           )}
         </p>
-        {tags.length > 0 && (
-          <ul class="tag-list">
-            {tags.map((tag) => (
-              <li class="tag">{tag}</li>
-            ))}
-          </ul>
-        )}
+        <TagList tags={tags} />
       </header>
       <slot />
     </article>
