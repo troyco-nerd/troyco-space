@@ -36,6 +36,9 @@ export default {
       if (url.pathname === '/api/publish' && request.method === 'POST') {
         return handlePublish(request, env);
       }
+      if (url.pathname === '/api/upload' && request.method === 'POST') {
+        return handleUpload(request, env);
+      }
     } catch (err) {
       return new Response(`Internal error: ${err && err.message ? err.message : String(err)}`, { status: 500 });
     }
@@ -118,7 +121,8 @@ async function handlePublish(request, env) {
     url: (form.get('url') || '').toString().trim(),
     repo: (form.get('repo') || '').toString().trim(),
     draft: form.get('draft') === 'on',
-    body: (form.get('body') || '').toString(),
+    // Browsers submit textareas with CRLF line endings; keep the saved file LF-only like the rest of the repo.
+    body: (form.get('body') || '').toString().replace(/\r\n?/g, '\n'),
   };
 
   if (!values.title || !values.description || !values.date || !values.body.trim()) {
@@ -201,6 +205,117 @@ async function handlePublish(request, env) {
 }
 
 // ---------------------------------------------------------------------
+// Image upload
+//
+// The editor shrinks each image in the browser, then POSTs it here. We
+// check it, commit it to public/images/posts/ on `main` (same GitHub API
+// the publish handler uses), and reply with the URL to put in the post.
+// ---------------------------------------------------------------------
+
+const IMAGE_DIR = 'public/images/posts';
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024; // safety net; the editor normally sends far less
+const IMAGE_EXTENSIONS = {
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/webp': 'webp',
+  'image/gif': 'gif',
+};
+
+async function handleUpload(request, env) {
+  if (!(await isAuthed(request, env))) {
+    return jsonResponse(
+      { error: 'You are logged out. Log in again in a new tab (so you keep your draft), then retry.' },
+      401
+    );
+  }
+  if (!env.GITHUB_TOKEN) {
+    return jsonResponse({ error: 'Server not configured (missing GITHUB_TOKEN secret).' }, 500);
+  }
+
+  let file = null;
+  try {
+    file = (await request.formData()).get('file');
+  } catch {
+    // fall through to the "no image" error below
+  }
+  if (!file || typeof file === 'string') {
+    return jsonResponse({ error: 'No image was received.' }, 400);
+  }
+
+  const ext = IMAGE_EXTENSIONS[file.type];
+  if (!ext) {
+    return jsonResponse({ error: 'Only PNG, JPEG, WebP, or GIF images are supported.' }, 415);
+  }
+  if (file.size > MAX_IMAGE_BYTES) {
+    return jsonResponse({ error: 'That image is too large (the limit is 8 MB).' }, 413);
+  }
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  if (!looksLikeImage(bytes, ext)) {
+    return jsonResponse({ error: `That file doesn't look like a real ${ext.toUpperCase()} image.` }, 415);
+  }
+
+  // e.g. "Chromecast Board.JPG" -> "chromecast-board-3f9a1c.jpg"
+  const baseName = slugify(String(file.name || '').replace(/\.[^.]*$/, '')).slice(0, 40).replace(/-+$/, '');
+  const name = `${baseName || 'image'}-${randomHex(3)}.${ext}`;
+  const path = `${IMAGE_DIR}/${name}`;
+
+  let ghResponse;
+  try {
+    ghResponse = await githubPutFile(env, path, bytesToBase64(bytes), `Add image: ${name}`);
+  } catch (err) {
+    return jsonResponse({ error: `Couldn't reach GitHub — check your connection and try again. (${err.message})` }, 502);
+  }
+  if (!ghResponse.ok) {
+    let detail = '';
+    try {
+      const data = await ghResponse.json();
+      detail = data && data.message ? data.message : '';
+    } catch {
+      // ignore
+    }
+    return jsonResponse({ error: `GitHub API error (${ghResponse.status}): ${detail || 'unknown error'}` }, 502);
+  }
+
+  return jsonResponse({ ok: true, name, url: `/images/posts/${name}`, size: bytes.length });
+}
+
+// Create a new file on BRANCH. GitHub rejects overlapping commits to the
+// same branch with a 409, so retry a couple of times before giving up.
+async function githubPutFile(env, path, contentBase64, message) {
+  const attempts = 3;
+  let response;
+  for (let i = 0; i < attempts; i++) {
+    response = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${path}`, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${env.GITHUB_TOKEN}`,
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+        'User-Agent': 'troyco-space-admin',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ message, content: contentBase64, branch: BRANCH }),
+    });
+    if (response.status !== 409) break;
+    await new Promise((resolve) => setTimeout(resolve, 400 * (i + 1)));
+  }
+  return response;
+}
+
+// Check the file's first bytes match what it claims to be, so a renamed
+// non-image can't be committed into the repo as one.
+function looksLikeImage(b, ext) {
+  const startsWith = (...sig) => sig.every((v, i) => b[i] === v);
+  if (ext === 'png') return startsWith(0x89, 0x50, 0x4e, 0x47);
+  if (ext === 'jpg') return startsWith(0xff, 0xd8, 0xff);
+  if (ext === 'gif') return startsWith(0x47, 0x49, 0x46, 0x38);
+  if (ext === 'webp') {
+    return startsWith(0x52, 0x49, 0x46, 0x46) && b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50;
+  }
+  return false;
+}
+
+// ---------------------------------------------------------------------
 // Auth / session helpers
 // ---------------------------------------------------------------------
 
@@ -264,6 +379,28 @@ function redirect(location) {
 
 function htmlResponse(body, status = 200) {
   return new Response(body, { status, headers: { 'content-type': 'text/html; charset=utf-8' } });
+}
+
+function jsonResponse(data, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
+  });
+}
+
+function randomHex(byteCount) {
+  const bytes = crypto.getRandomValues(new Uint8Array(byteCount));
+  return [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+function bytesToBase64(bytes) {
+  // Build the binary string in chunks; one big spread would overflow the call stack.
+  let binary = '';
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
 }
 
 function slugify(text) {
@@ -330,15 +467,238 @@ const PAGE_STYLE = `
   button:hover{filter:brightness(1.12);}
   button:focus-visible{outline:2px solid var(--gold);outline-offset:3px;}
   .error{color:var(--danger);background:rgba(255,107,107,.08);border:1px solid var(--danger);border-left-width:3px;border-radius:2px;padding:.75rem 1rem;margin-bottom:1rem;font-size:1rem;}
-  .success{color:var(--ice);background:rgba(159,216,255,.08);border:1px solid var(--ice);border-left-width:3px;border-radius:2px;padding:.75rem 1rem;margin-bottom:1rem;font-size:1rem;}
+  .success{overflow-wrap:anywhere;color:var(--ice);background:rgba(159,216,255,.08);border:1px solid var(--ice);border-left-width:3px;border-radius:2px;padding:.75rem 1rem;margin-bottom:1rem;font-size:1rem;}
   .success code{background:#050608;padding:.1em .4em;border-radius:2px;}
   .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:1.25rem;}
   .topbar form{margin:0;}
   .topbar button{margin:0;font-size:.5rem;padding:.6rem 1rem;background:rgba(255,214,10,.1);color:var(--gold);}
   .topbar button:hover{background:var(--gold);color:#000;filter:none;}
+  [hidden]{display:none !important;}
+  button:disabled{opacity:.5;cursor:wait;filter:none;}
+  button.secondary{margin-top:0;font-size:.55rem;padding:.7rem 1.1rem;background:rgba(255,214,10,.1);color:var(--gold);}
+  button.secondary:hover:not(:disabled){background:var(--gold);color:#000;filter:none;}
+  .images-bar{display:flex;align-items:center;flex-wrap:wrap;gap:.5rem .9rem;margin-top:.75rem;}
+  .hint{font-size:.85rem;color:var(--muted);flex:1;min-width:12rem;}
+  textarea.dragging{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold),0 0 18px rgba(255,214,10,.35);}
+  .image-list{list-style:none;margin:.9rem 0 0;padding:0;display:grid;gap:.6rem;}
+  .image-list li{display:flex;flex-wrap:wrap;align-items:center;gap:.6rem .85rem;padding:.55rem .7rem;background:#050608;border:1px solid var(--border);border-radius:2px;}
+  .image-list .thumb{width:56px;height:56px;object-fit:cover;border:1px solid var(--border);border-radius:2px;flex:none;}
+  .image-list .meta{flex:1 1 10rem;min-width:10rem;}
+  .image-list .fname{font-size:.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .image-list .state{font-size:.85rem;color:var(--muted);}
+  .image-list .state.ok{color:var(--ice);}
+  .image-list .state.fail{color:var(--danger);}
+  .image-list .alt{margin-top:.4rem;padding:.4rem .6rem;font-size:.9rem;}
+  .image-list .insert{flex:none;}
   a{color:var(--gold);}
   a:hover{color:#fff;}
   @media (max-width:560px){.row{flex-direction:column;gap:0;}}
+`;
+
+// Browser-side code for the editor's image button / drag-drop / paste.
+// Lives in a String.raw template, so it must not contain backticks or "${".
+const EDITOR_SCRIPT = String.raw`
+(() => {
+  const MAX_SIDE = 1600;              // longest side, in pixels, after shrinking
+  const KEEP_ORIGINAL_UNDER = 1.5e6;  // small images that are already fine go up untouched
+  const textarea = document.getElementById('body');
+  const fileInput = document.getElementById('image-input');
+  const list = document.getElementById('image-list');
+  const publishBtn = document.querySelector('form[action="/api/publish"] button[type="submit"]');
+  let queue = Promise.resolve();      // uploads run one at a time: GitHub rejects overlapping commits
+  let pending = 0;
+  let touched = false;                // has the cursor ever been in the body box?
+
+  textarea.addEventListener('focus', () => { touched = true; });
+  document.getElementById('add-image').addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', () => { addFiles(fileInput.files); fileInput.value = ''; });
+
+  // Drop an image anywhere on the page (dropping on the page would otherwise navigate away and lose the draft).
+  const hasFiles = (e) => e.dataTransfer && Array.from(e.dataTransfer.types).includes('Files');
+  window.addEventListener('dragover', (e) => {
+    if (hasFiles(e)) { e.preventDefault(); textarea.classList.add('dragging'); }
+  });
+  window.addEventListener('dragleave', (e) => {
+    if (!e.relatedTarget) textarea.classList.remove('dragging');
+  });
+  window.addEventListener('drop', (e) => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    textarea.classList.remove('dragging');
+    addFiles(e.dataTransfer.files);
+  });
+  // Paste a screenshot / copied image straight into the box (but leave normal text pastes alone).
+  textarea.addEventListener('paste', (e) => {
+    const files = e.clipboardData && e.clipboardData.files;
+    if (files && files.length && !e.clipboardData.getData('text/plain')) {
+      e.preventDefault();
+      addFiles(files);
+    }
+  });
+
+  function addFiles(files) {
+    Array.from(files).forEach((file) => {
+      if (!file.type.startsWith('image/')) return;
+      const item = makeItem(file);
+      setPending(1);
+      queue = queue
+        .then(async () => {
+          item.progress('Uploading…');
+          const data = await upload(await prepare(file));
+          item.done(data);
+        })
+        .catch((err) => item.fail(err && err.message ? err.message : 'Upload failed.'))
+        .then(() => setPending(-1));
+    });
+  }
+
+  // Shrink big photos (and convert to WebP) before uploading: faster uploads, faster pages.
+  async function prepare(file) {
+    if (file.type === 'image/gif') return file;   // re-encoding would flatten the animation
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+      throw new Error('Only PNG, JPEG, WebP, or GIF images are supported.');
+    }
+    let bitmap;
+    try { bitmap = await createImageBitmap(file); } catch { throw new Error('Could not read that image.'); }
+    const scale = Math.min(1, MAX_SIDE / Math.max(bitmap.width, bitmap.height));
+    if (scale === 1 && file.size <= KEEP_ORIGINAL_UNDER) { bitmap.close(); return file; }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close();
+
+    let blob = await toBlob(canvas, 'image/webp', 0.85);
+    if (!blob || blob.type !== 'image/webp') {    // older Safari can't encode WebP: fall back to JPEG
+      const flat = document.createElement('canvas');
+      flat.width = canvas.width;
+      flat.height = canvas.height;
+      const ctx = flat.getContext('2d');
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, flat.width, flat.height);
+      ctx.drawImage(canvas, 0, 0);
+      blob = await toBlob(flat, 'image/jpeg', 0.88);
+    }
+    if (!blob) throw new Error('Could not process that image.');
+    if (scale === 1 && blob.size >= file.size) return file;   // re-encoding didn't help
+    const ext = blob.type === 'image/webp' ? 'webp' : 'jpg';
+    return new File([blob], (file.name || 'image').replace(/\.[^.]*$/, '') + '.' + ext, { type: blob.type });
+  }
+
+  const toBlob = (canvas, type, quality) => new Promise((resolve) => canvas.toBlob(resolve, type, quality));
+
+  async function upload(file) {
+    const form = new FormData();
+    form.append('file', file, file.name);
+    let res;
+    try {
+      res = await fetch('/api/upload', { method: 'POST', body: form, credentials: 'same-origin' });
+    } catch {
+      throw new Error('Could not reach the server — check your connection.');
+    }
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.url) throw new Error(data.error || 'Upload failed (' + res.status + ').');
+    return data;
+  }
+
+  // One row in the image list: thumbnail, status, alt-text box, "Insert again".
+  function makeItem(file) {
+    const li = document.createElement('li');
+    const thumb = document.createElement('img');
+    thumb.className = 'thumb';
+    thumb.alt = '';
+    thumb.src = URL.createObjectURL(file);
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    const fname = document.createElement('div');
+    fname.className = 'fname';
+    fname.textContent = file.name || 'pasted image';
+    const state = document.createElement('div');
+    state.className = 'state';
+    state.textContent = 'Waiting…';
+    const alt = document.createElement('input');
+    alt.type = 'text';
+    alt.className = 'alt';
+    alt.hidden = true;
+    alt.placeholder = 'Describe the image (alt text)';
+    alt.value = altFromName(file.name);
+    const again = document.createElement('button');
+    again.type = 'button';
+    again.className = 'secondary insert';
+    again.textContent = 'Insert again';
+    again.hidden = true;
+    meta.append(fname, state, alt);
+    li.append(thumb, meta, again);
+    list.append(li);
+
+    let url = '';
+    let insertedAlt = '';
+    function insert() {
+      insertedAlt = cleanAlt(alt.value);
+      insertImage(url, insertedAlt);
+    }
+    // Editing the alt box rewrites the alt text already in the post.
+    alt.addEventListener('input', () => {
+      const next = cleanAlt(alt.value);
+      replaceAll('![' + insertedAlt + '](' + url + ')', '![' + next + '](' + url + ')');
+      insertedAlt = next;
+    });
+    again.addEventListener('click', insert);
+
+    return {
+      progress(msg) { state.textContent = msg; },
+      fail(msg) { state.textContent = msg; state.className = 'state fail'; },
+      done(data) {
+        url = data.url;
+        state.textContent = 'Added to your site (' + formatSize(data.size) + ')';
+        state.className = 'state ok';
+        alt.hidden = false;
+        again.hidden = false;
+        insert();
+      },
+    };
+  }
+
+  // Put ![alt](url) on its own line at the cursor (or at the end if the cursor was never in the box).
+  function insertImage(url, alt) {
+    const md = '![' + alt + '](' + url + ')';
+    const value = textarea.value;
+    const at = touched ? textarea.selectionEnd : value.length;
+    const before = value.slice(0, at);
+    const after = value.slice(at);
+    const lead = !before ? '' : before.endsWith('\n\n') ? '' : before.endsWith('\n') ? '\n' : '\n\n';
+    const trail = after.startsWith('\n\n') ? '' : after.startsWith('\n') ? '\n' : '\n\n';
+    textarea.value = before + lead + md + trail + after;
+    const caret = before.length + lead.length + md.length + trail.length;
+    textarea.setSelectionRange(caret, caret);
+  }
+
+  function replaceAll(from, to) {
+    if (!textarea.value.includes(from)) return;
+    const s = textarea.selectionStart;
+    const e = textarea.selectionEnd;
+    textarea.value = textarea.value.split(from).join(to);
+    textarea.setSelectionRange(s, e);
+  }
+
+  function setPending(delta) {
+    pending += delta;
+    if (!publishBtn) return;
+    publishBtn.disabled = pending > 0;
+    publishBtn.textContent = pending > 0 ? 'Uploading images…' : 'Publish';
+  }
+
+  // Brackets/backslashes would break the Markdown, so strip them.
+  const cleanAlt = (s) => s.replace(/[\[\]\\]/g, '').replace(/\s+/g, ' ').trim();
+  // "chromecast-board.jpg" -> "chromecast board"; camera/screenshot names are left blank.
+  function altFromName(name) {
+    const base = String(name || '').replace(/\.[^.]*$/, '');
+    if (/^(image|img|dsc|pxl|photo|screenshot|screen shot|pasted)/i.test(base)) return '';
+    return cleanAlt(base.replace(/[-_]+/g, ' '));
+  }
+  const formatSize = (n) => n < 1048576 ? Math.max(1, Math.round(n / 1024)) + ' KB' : (n / 1048576).toFixed(1) + ' MB';
+})();
 `;
 
 function renderLogin(error) {
@@ -433,6 +793,13 @@ function renderEditor(opts = {}) {
     <label for="body">Body (Markdown)</label>
     <textarea id="body" name="body" required>${escapeHtml(v.body)}</textarea>
 
+    <div class="images-bar">
+      <button type="button" class="secondary" id="add-image">Add image</button>
+      <span class="hint">…or drag &amp; drop / paste an image into the box above. It&rsquo;s shrunk and saved to your site right away, and the Markdown is added to your post.</span>
+    </div>
+    <input type="file" id="image-input" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden>
+    <ul class="image-list" id="image-list" aria-live="polite"></ul>
+
     <div class="checkbox-row">
       <input type="checkbox" id="draft" name="draft" ${v.draft ? 'checked' : ''}>
       <label for="draft">Save as draft (won't appear on the site)</label>
@@ -441,5 +808,6 @@ function renderEditor(opts = {}) {
     <button type="submit">Publish</button>
   </form>
 </div>
+<script>${EDITOR_SCRIPT}</script>
 </body></html>`;
 }
