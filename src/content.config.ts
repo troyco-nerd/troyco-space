@@ -8,6 +8,8 @@ const blog = defineCollection({
     description: z.string(),
     pubDate: z.coerce.date(),
     updatedDate: z.coerce.date().optional(),
+    // Picture shown when the post is shared (link previews). Falls back to the site card.
+    image: z.string().optional(),
     tags: z.array(z.string()).default([]),
     draft: z.boolean().default(false),
   }),
@@ -21,6 +23,8 @@ const projects = defineCollection({
     date: z.coerce.date(),
     url: z.string().url().optional(),
     repo: z.string().url().optional(),
+    // Picture shown when the project is shared (link previews). Falls back to the site card.
+    image: z.string().optional(),
     tags: z.array(z.string()).default([]),
     draft: z.boolean().default(false),
   }),

@@ -15,7 +15,7 @@ const { project } = Astro.props;
 const { Content } = await render(project);
 ---
 
-<Layout title={project.data.title} description={project.data.description}>
+<Layout title={project.data.title} description={project.data.description} image={project.data.image}>
   <main class="page narrow">
     <article>
       <header class="post-header">

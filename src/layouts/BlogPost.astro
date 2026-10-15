@@ -8,12 +8,13 @@ interface Props {
   pubDate: Date;
   updatedDate?: Date;
   tags?: string[];
+  image?: string;
 }
 
-const { title, description, pubDate, updatedDate, tags = [] } = Astro.props;
+const { title, description, pubDate, updatedDate, tags = [], image } = Astro.props;
 ---
 
-<Layout title={title} description={description}>
+<Layout title={title} description={description} image={image}>
   <main class="page narrow">
     <article>
       <header class="post-header">
