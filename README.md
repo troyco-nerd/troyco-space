@@ -63,14 +63,12 @@ of it. The Editor and Stats links are at the top of the admin.
   logged in to `/admin`, bots, browsers sending Do Not Track / Global Privacy
   Control, reloads of the same page within 30 minutes, and `*.workers.dev`
   preview addresses. Days are UTC.
-- **Turning it on (one time):** the stats need a D1 database bound as `DB`. Add
-  this to `wrangler.jsonc` and Cloudflare creates the database on the next deploy:
-
-  ```jsonc
-  "d1_databases": [{ "binding": "DB", "database_name": "troyco-stats" }]
-  ```
-
-  Until then the Stats page says it isn't switched on, and nothing is recorded.
+- **The database:** the stats live in a D1 database bound as `DB` in
+  `wrangler.jsonc`. It has no ID on purpose: Cloudflare creates the database
+  (named `troyco-stats`) the first time the site deploys with that setting, and
+  you can see it in the Cloudflare dashboard under Storage & Databases → D1. If
+  the binding is ever removed, the Stats page says it isn't switched on and
+  nothing is recorded.
 - **Housekeeping:** rows older than about 13 months are deleted automatically,
   and the free D1 allowance (100,000 writes a day) is far more than a personal
   site needs. `npm run dev` doesn't run the worker, so there are no stats locally.
