@@ -17,7 +17,7 @@ interface Props {
 const {
   title = SITE_TITLE,
   description = SITE_DESCRIPTION,
-  image = '/og-default.png',
+  image = '/og-default.jpg',
 } = Astro.props;
 
 const pageTitle = title === SITE_TITLE ? title : `${title} · ${SITE_TITLE}`;
@@ -56,5 +56,20 @@ const canonicalURL = new URL(Astro.url.pathname, Astro.site);
     <Header />
     <slot />
     <Footer />
+    {!import.meta.env.DEV && (
+      <script is:inline>
+        // Anonymous page-view counter for the private stats in /admin (see worker/stats.js).
+        // No cookies. Skipped for browsers that ask not to be tracked, and when running `npm run dev`.
+        (function () {
+          try {
+            if (navigator.doNotTrack === '1' || navigator.globalPrivacyControl) return;
+            var body = JSON.stringify({ p: location.pathname, r: document.referrer });
+            if (!(navigator.sendBeacon && navigator.sendBeacon('/api/hit', body))) {
+              fetch('/api/hit', { method: 'POST', body: body, keepalive: true });
+            }
+          } catch (e) {}
+        })();
+      </script>
+    )}
   </body>
 </html>

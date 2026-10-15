@@ -10,6 +10,8 @@
 //   ADMIN_PASSWORD  — the password for /admin (also used to sign session cookies)
 //   GITHUB_TOKEN     — a fine-grained GitHub PAT with Contents: Read & write on this repo
 
+import { recordHit, loadStats, renderStatsBody, STATS_STYLE, STATS_SCRIPT } from './stats.js';
+
 const REPO_OWNER = 'troyco-nerd';
 const REPO_NAME = 'troyco-space';
 const BRANCH = 'main';
@@ -38,6 +40,12 @@ export default {
       }
       if (url.pathname === '/api/upload' && request.method === 'POST') {
         return handleUpload(request, env);
+      }
+      if (url.pathname === '/api/hit' && request.method === 'POST') {
+        return handleHit(request, env, ctx);
+      }
+      if (url.pathname === '/admin/stats' && request.method === 'GET') {
+        return handleStats(request, env, url);
       }
     } catch (err) {
       return new Response(`Internal error: ${err && err.message ? err.message : String(err)}`, { status: 500 });
@@ -120,6 +128,7 @@ async function handlePublish(request, env) {
     tags: (form.get('tags') || '').toString().trim(),
     url: (form.get('url') || '').toString().trim(),
     repo: (form.get('repo') || '').toString().trim(),
+    image: (form.get('image') || '').toString().trim(),
     draft: form.get('draft') === 'on',
     // Browsers submit textareas with CRLF line endings; keep the saved file LF-only like the rest of the repo.
     body: (form.get('body') || '').toString().replace(/\r\n?/g, '\n'),
@@ -130,6 +139,13 @@ async function handlePublish(request, env) {
   }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(values.date)) {
     return htmlResponse(renderEditor({ error: 'Date must be in YYYY-MM-DD format.', values }), 400);
+  }
+  // The featured image can only be one the editor uploaded (the form sets this value itself).
+  if (values.image && !/^\/images\/posts\/[a-z0-9][a-z0-9-]*\.(?:jpg|png|webp|gif)$/.test(values.image)) {
+    return htmlResponse(
+      renderEditor({ error: 'Featured image must be one uploaded with the editor — remove it and choose it again.', values: { ...values, image: '' } }),
+      400
+    );
   }
 
   const slug = slugify(values.title);
@@ -153,6 +169,7 @@ async function handlePublish(request, env) {
   if (tagsArray.length) {
     frontmatter.push(`tags: [${tagsArray.map(yamlString).join(', ')}]`);
   }
+  if (values.image) frontmatter.push(`image: ${yamlString(values.image)}`);
   if (values.draft) frontmatter.push('draft: true');
   frontmatter.push('---');
   const fileContent = `${frontmatter.join('\n')}\n\n${values.body.trim()}\n`;
@@ -202,6 +219,33 @@ async function handlePublish(request, env) {
       success: `Published! Committed to <code>${escapeHtml(path)}</code> on <code>main</code> — Cloudflare will build and deploy automatically, live at <a href="${liveUrl}">${liveUrl}</a> in about a minute.`,
     })
   );
+}
+
+// ---------------------------------------------------------------------
+// Visitor stats (the counting + page live in stats.js)
+// ---------------------------------------------------------------------
+
+// The page beacon. Always answers 204: it never needs a reply, and nothing about
+// whether a visit was counted is revealed to the caller.
+async function handleHit(request, env, ctx) {
+  await recordHit(request, env, ctx, await isAuthed(request, env));
+  return new Response(null, { status: 204, headers: { 'cache-control': 'no-store' } });
+}
+
+async function handleStats(request, env, url) {
+  if (!(await isAuthed(request, env))) {
+    return redirect('/admin');
+  }
+  const asked = Number(url.searchParams.get('days'));
+  const days = [7, 30, 90].includes(asked) ? asked : 30;
+  let data = null;
+  let error = '';
+  try {
+    data = await loadStats(env, days);
+  } catch (err) {
+    error = `Couldn't read the stats database: ${err && err.message ? err.message : err}`;
+  }
+  return htmlResponse(renderStatsPage(data, days, error));
 }
 
 // ---------------------------------------------------------------------
@@ -471,6 +515,11 @@ const PAGE_STYLE = `
   .success code{background:#050608;padding:.1em .4em;border-radius:2px;}
   .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:1.25rem;}
   .topbar form{margin:0;}
+  .topbar-actions{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:.6rem 1.1rem;}
+  .admin-nav{display:flex;gap:1rem;}
+  .admin-nav a{font-family:'Michroma',sans-serif;font-size:.55rem;letter-spacing:.16em;text-transform:uppercase;text-decoration:none;color:var(--muted);padding:.3rem 0;border-bottom:2px solid transparent;}
+  .admin-nav a:hover{color:#fff;}
+  .admin-nav a[aria-current="page"]{color:#fff;border-bottom-color:var(--gold);}
   .topbar button{margin:0;font-size:.5rem;padding:.6rem 1rem;background:rgba(255,214,10,.1);color:var(--gold);}
   .topbar button:hover{background:var(--gold);color:#000;filter:none;}
   [hidden]{display:none !important;}
@@ -489,7 +538,13 @@ const PAGE_STYLE = `
   .image-list .state.ok{color:var(--ice);}
   .image-list .state.fail{color:var(--danger);}
   .image-list .alt{margin-top:.4rem;padding:.4rem .6rem;font-size:.9rem;}
+  .image-list .actions{display:flex;flex-wrap:wrap;gap:.5rem;}
   .image-list .insert{flex:none;}
+  .featured{margin-top:.1rem;}
+  #featured-img{display:block;width:100%;max-width:24rem;height:auto;aspect-ratio:1200/630;object-fit:cover;border:1px solid var(--border);border-radius:2px;}
+  .featured .state{font-size:.85rem;color:var(--muted);margin:.4rem 0 .2rem;}
+  .featured .state.ok{color:var(--ice);}
+  .featured .state.fail{color:var(--danger);}
   a{color:var(--gold);}
   a:hover{color:#fff;}
   @media (max-width:560px){.row{flex-direction:column;gap:0;}}
@@ -512,6 +567,92 @@ const EDITOR_SCRIPT = String.raw`
   textarea.addEventListener('focus', () => { touched = true; });
   document.getElementById('add-image').addEventListener('click', () => fileInput.click());
   fileInput.addEventListener('change', () => { addFiles(fileInput.files); fileInput.value = ''; });
+
+  // ---- Featured image: the picture link previews show when the post is shared ----
+  const SHARE_W = 1200;
+  const SHARE_H = 630;
+  const SHARE_MAX_BYTES = 280 * 1024;  // WhatsApp and some other apps skip preview images over ~300 KB
+  const featuredInput = document.getElementById('featured-input');
+  const featuredUrl = document.getElementById('featured-url');
+  const featuredBox = document.getElementById('featured-preview');
+  const featuredImg = document.getElementById('featured-img');
+  const featuredState = document.getElementById('featured-state');
+  const clearFeatured = document.getElementById('clear-featured');
+  let featuredToken = 0;              // lets a newer choice (or Remove) win over a slower earlier upload
+
+  document.getElementById('set-featured').addEventListener('click', () => featuredInput.click());
+  featuredInput.addEventListener('change', () => {
+    const file = featuredInput.files[0];
+    featuredInput.value = '';
+    if (file) setFeatured(file);
+  });
+  clearFeatured.addEventListener('click', () => {
+    featuredToken++;
+    featuredUrl.value = '';
+    featuredImg.hidden = true;
+    featuredImg.removeAttribute('src');
+    featuredBox.hidden = true;
+    clearFeatured.hidden = true;
+  });
+
+  function setFeatured(file) {
+    const token = ++featuredToken;
+    featuredUrl.value = '';           // no stale value if this attempt fails
+    featuredImg.hidden = true;
+    featuredBox.hidden = false;
+    clearFeatured.hidden = false;
+    featuredState.className = 'state';
+    featuredState.textContent = 'Waiting…';
+    setPending(1);
+    queue = queue
+      .then(async () => {
+        if (token !== featuredToken) return;
+        featuredState.textContent = 'Cropping and uploading…';
+        const shot = await makeShareImage(file);
+        const data = await upload(shot.file);
+        if (token !== featuredToken) return;
+        featuredUrl.value = data.url;
+        featuredImg.src = URL.createObjectURL(shot.blob);   // show exactly what was cropped
+        featuredImg.hidden = false;
+        featuredState.className = 'state ok';
+        featuredState.textContent = 'Featured image saved (' + formatSize(data.size) + ')' +
+          (shot.small ? ' — the original is small, so it may look soft' : '');
+      })
+      .catch((err) => {
+        if (token !== featuredToken) return;
+        featuredState.className = 'state fail';
+        featuredState.textContent = err && err.message ? err.message : 'Upload failed.';
+      })
+      .then(() => setPending(-1));
+  }
+
+  // Centre-crop to 1200x630 and save as a small JPEG (every app can show JPEG).
+  async function makeShareImage(file) {
+    if (!['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(file.type)) {
+      throw new Error('Only PNG, JPEG, WebP, or GIF images are supported.');
+    }
+    let bitmap;
+    try { bitmap = await createImageBitmap(file); } catch { throw new Error('Could not read that image.'); }
+    const scale = Math.max(SHARE_W / bitmap.width, SHARE_H / bitmap.height);
+    const sw = SHARE_W / scale;
+    const sh = SHARE_H / scale;
+    const canvas = document.createElement('canvas');
+    canvas.width = SHARE_W;
+    canvas.height = SHARE_H;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#000';           // transparent areas become the site's black
+    ctx.fillRect(0, 0, SHARE_W, SHARE_H);
+    ctx.drawImage(bitmap, (bitmap.width - sw) / 2, (bitmap.height - sh) / 2, sw, sh, 0, 0, SHARE_W, SHARE_H);
+    bitmap.close();
+    let blob = null;
+    for (const quality of [0.88, 0.78, 0.68, 0.58, 0.48]) {
+      blob = await toBlob(canvas, 'image/jpeg', quality);
+      if (blob && blob.size <= SHARE_MAX_BYTES) break;
+    }
+    if (!blob) throw new Error('Could not process that image.');
+    const base = (file.name || 'image').replace(/\.[^.]*$/, '');
+    return { blob, file: new File([blob], base + '-share.jpg', { type: 'image/jpeg' }), small: scale > 1 };
+  }
 
   // Drop an image anywhere on the page (dropping on the page would otherwise navigate away and lose the draft).
   const hasFiles = (e) => e.dataTransfer && Array.from(e.dataTransfer.types).includes('Files');
@@ -628,8 +769,16 @@ const EDITOR_SCRIPT = String.raw`
     again.className = 'secondary insert';
     again.textContent = 'Insert again';
     again.hidden = true;
+    const feature = document.createElement('button');
+    feature.type = 'button';
+    feature.className = 'secondary insert';
+    feature.textContent = 'Use as featured';
+    feature.hidden = true;
+    const actions = document.createElement('div');
+    actions.className = 'actions';
+    actions.append(again, feature);
     meta.append(fname, state, alt);
-    li.append(thumb, meta, again);
+    li.append(thumb, meta, actions);
     list.append(li);
 
     let url = '';
@@ -645,6 +794,7 @@ const EDITOR_SCRIPT = String.raw`
       insertedAlt = next;
     });
     again.addEventListener('click', insert);
+    feature.addEventListener('click', () => setFeatured(file));
 
     return {
       progress(msg) { state.textContent = msg; },
@@ -655,6 +805,7 @@ const EDITOR_SCRIPT = String.raw`
         state.className = 'state ok';
         alt.hidden = false;
         again.hidden = false;
+        feature.hidden = false;
         insert();
       },
     };
@@ -723,6 +874,36 @@ function renderLogin(error) {
 </body></html>`;
 }
 
+// Page title, the Editor | Stats links, and Log Out.
+function adminTopbar(title, current) {
+  const link = (href, id, label) =>
+    `<a href="${href}"${current === id ? ' aria-current="page"' : ''}>${label}</a>`;
+  return `<div class="topbar">
+    <h1>${escapeHtml(title)}</h1>
+    <div class="topbar-actions">
+      <nav class="admin-nav" aria-label="Admin">${link('/admin/editor', 'editor', 'Editor')}${link('/admin/stats', 'stats', 'Stats')}</nav>
+      <form method="POST" action="/admin/logout"><button type="submit">Log Out</button></form>
+    </div>
+  </div>`;
+}
+
+function renderStatsPage(data, days, error) {
+  return `<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Visitor stats · Troy Coroles Admin</title>
+<style>${PAGE_STYLE}${STATS_STYLE}</style>
+</head><body>
+<div class="panel wide">
+  ${adminTopbar('Visitor stats', 'stats')}
+  ${error ? `<div class="error">${escapeHtml(error)}</div>` : renderStatsBody(data, days)}
+</div>
+<script>${STATS_SCRIPT}</script>
+</body></html>`;
+}
+
 function renderEditor(opts = {}) {
   const { error, success } = opts;
   const v = Object.assign(
@@ -734,6 +915,7 @@ function renderEditor(opts = {}) {
       tags: '',
       url: '',
       repo: '',
+      image: '',
       draft: false,
       body: '',
     },
@@ -749,10 +931,7 @@ function renderEditor(opts = {}) {
 <style>${PAGE_STYLE}</style>
 </head><body>
 <div class="panel wide">
-  <div class="topbar">
-    <h1>New Post</h1>
-    <form method="POST" action="/admin/logout"><button type="submit">Log Out</button></form>
-  </div>
+  ${adminTopbar('New Post', 'editor')}
   ${error ? `<div class="error">${escapeHtml(error)}</div>` : ''}
   ${success ? `<div class="success">${success}</div>` : ''}
   <form method="POST" action="/api/publish">
@@ -767,6 +946,21 @@ function renderEditor(opts = {}) {
 
     <label for="description">Description</label>
     <input type="text" id="description" name="description" required value="${escapeHtml(v.description)}">
+
+    <label for="set-featured">Featured image (for sharing)</label>
+    <div class="featured">
+      <div id="featured-preview" ${v.image ? '' : 'hidden'}>
+        <img id="featured-img" alt="Preview of the featured image" width="1200" height="630" ${v.image ? `src="${escapeHtml(v.image)}"` : 'hidden'}>
+        <div class="state" id="featured-state">${v.image ? 'Featured image set' : ''}</div>
+      </div>
+      <div class="images-bar">
+        <button type="button" class="secondary" id="set-featured">Choose featured image</button>
+        <button type="button" class="secondary" id="clear-featured" ${v.image ? '' : 'hidden'}>Remove</button>
+        <span class="hint">The picture shown with your title and description when the post is shared on social media or in a text message. It&rsquo;s cropped to 1200&times;630. Leave it empty to use the site logo.</span>
+      </div>
+      <input type="hidden" name="image" id="featured-url" value="${escapeHtml(v.image)}">
+      <input type="file" id="featured-input" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
+    </div>
 
     <div class="row">
       <div>

@@ -1,0 +1,63 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import EntryCard from '../../components/EntryCard.astro';
+import { getTagIndex } from '../../utils/tags';
+
+export async function getStaticPaths() {
+  const tags = await getTagIndex();
+  return tags.map((tag) => ({ params: { tag: tag.slug }, props: { tag } }));
+}
+
+const { tag } = Astro.props;
+const { label, posts, projects } = tag;
+
+const parts = [];
+if (posts.length) parts.push(`${posts.length} ${posts.length === 1 ? 'post' : 'posts'}`);
+if (projects.length) parts.push(`${projects.length} ${projects.length === 1 ? 'project' : 'projects'}`);
+const summary = parts.join(' and ');
+---
+
+<Layout title={`Tagged “${label}”`} description={`${summary} tagged ${label} on troyco.space.`}>
+  <main class="page narrow">
+    <p class="crumb"><a href="/tags/">&larr; All tags</a></p>
+    <h1>{label}</h1>
+    <p class="entry-desc">{summary} tagged <strong>{label}</strong>.</p>
+
+    {posts.length > 0 && (
+      <section>
+        <h2>Posts</h2>
+        <ul class="entry-list">
+          {posts.map((post) => (
+            <EntryCard
+              as="h3"
+              href={`/blog/${post.id}/`}
+              title={post.data.title}
+              date={post.data.pubDate}
+              description={post.data.description}
+              tags={post.data.tags}
+              image={post.data.image}
+            />
+          ))}
+        </ul>
+      </section>
+    )}
+
+    {projects.length > 0 && (
+      <section>
+        <h2>Projects</h2>
+        <ul class="entry-list">
+          {projects.map((project) => (
+            <EntryCard
+              as="h3"
+              href={`/projects/${project.id}/`}
+              title={project.data.title}
+              description={project.data.description}
+              tags={project.data.tags}
+              image={project.data.image}
+            />
+          ))}
+        </ul>
+      </section>
+    )}
+  </main>
+</Layout>

@@ -1,0 +1,25 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import { getTagIndex } from '../../utils/tags';
+
+const tags = await getTagIndex();
+---
+
+<Layout title="Tags" description="Browse everything on troyco.space by topic.">
+  <main class="page narrow">
+    <h1>Tags</h1>
+    {tags.length === 0 ? (
+      <p class="entry-desc">No tags yet — they show up here once a post or project uses one.</p>
+    ) : (
+      <ul class="tag-list tag-cloud">
+        {tags.map((tag) => (
+          <li>
+            <a class="tag" href={`/tags/${tag.slug}/`}>
+              {tag.label} <span class="count">{tag.count}</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    )}
+  </main>
+</Layout>

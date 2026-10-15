@@ -1,7 +1,7 @@
 ---
 import { getCollection } from 'astro:content';
 import Layout from '../layouts/Layout.astro';
-import { formatDate } from '../utils/formatDate';
+import EntryCard from '../components/EntryCard.astro';
 
 const posts = (await getCollection('blog', ({ data }) => !data.draft))
   .sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf())
@@ -42,13 +42,15 @@ const projects = (await getCollection('projects', ({ data }) => !data.draft))
       ) : (
         <ul class="entry-list">
           {posts.map((post) => (
-            <li>
-              <h3 class="entry-title">
-                <a href={`/blog/${post.id}/`}>{post.data.title}</a>
-              </h3>
-              <p class="entry-meta">{formatDate(post.data.pubDate)}</p>
-              <p class="entry-desc">{post.data.description}</p>
-            </li>
+            <EntryCard
+              as="h3"
+              href={`/blog/${post.id}/`}
+              title={post.data.title}
+              date={post.data.pubDate}
+              description={post.data.description}
+              tags={post.data.tags}
+              image={post.data.image}
+            />
           ))}
         </ul>
       )}
@@ -64,12 +66,14 @@ const projects = (await getCollection('projects', ({ data }) => !data.draft))
       ) : (
         <ul class="entry-list">
           {projects.map((project) => (
-            <li>
-              <h3 class="entry-title">
-                <a href={`/projects/${project.id}/`}>{project.data.title}</a>
-              </h3>
-              <p class="entry-desc">{project.data.description}</p>
-            </li>
+            <EntryCard
+              as="h3"
+              href={`/projects/${project.id}/`}
+              title={project.data.title}
+              description={project.data.description}
+              tags={project.data.tags}
+              image={project.data.image}
+            />
           ))}
         </ul>
       )}

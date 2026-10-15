@@ -1,35 +1,46 @@
 ---
 import { getCollection } from 'astro:content';
 import Layout from '../../layouts/Layout.astro';
-import { formatDate } from '../../utils/formatDate';
+import EntryCard from '../../components/EntryCard.astro';
+import { getTagIndex } from '../../utils/tags';
 
 const posts = (await getCollection('blog', ({ data }) => !data.draft)).sort(
   (a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf()
 );
+
+// Only tags that are on at least one published post.
+const tags = (await getTagIndex()).filter((tag) => tag.posts.length > 0);
 ---
 
 <Layout title="Blog" description="Posts about what I'm building and learning.">
   <main class="page narrow">
     <h1>Blog</h1>
+    {tags.length > 0 && (
+      <nav class="tag-browse" aria-label="Browse posts by tag">
+        <ul class="tag-list">
+          {tags.map((tag) => (
+            <li>
+              <a class="tag" href={`/tags/${tag.slug}/`}>
+                {tag.label} <span class="count">{tag.posts.length}</span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      </nav>
+    )}
     {posts.length === 0 ? (
       <p class="entry-desc">Nothing published yet — check back soon.</p>
     ) : (
       <ul class="entry-list">
         {posts.map((post) => (
-          <li>
-            <h2 class="entry-title">
-              <a href={`/blog/${post.id}/`}>{post.data.title}</a>
-            </h2>
-            <p class="entry-meta">{formatDate(post.data.pubDate)}</p>
-            <p class="entry-desc">{post.data.description}</p>
-            {post.data.tags.length > 0 && (
-              <ul class="tag-list">
-                {post.data.tags.map((tag) => (
-                  <li class="tag">{tag}</li>
-                ))}
-              </ul>
-            )}
-          </li>
+          <EntryCard
+            href={`/blog/${post.id}/`}
+            title={post.data.title}
+            date={post.data.pubDate}
+            description={post.data.description}
+            tags={post.data.tags}
+            image={post.data.image}
+          />
         ))}
       </ul>
     )}
