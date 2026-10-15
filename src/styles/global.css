@@ -234,6 +234,15 @@ img {
   border: 1px solid var(--border);
 }
 
+/* Images inside posts (added from the admin editor's "Add image") */
+article img {
+  display: block;
+  height: auto;
+  margin: 1.75rem auto;
+  border-color: var(--border-bright);
+  box-shadow: 0 0 28px rgba(255, 214, 10, 0.08);
+}
+
 hr {
   border: none;
   height: 1px;
