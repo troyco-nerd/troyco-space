@@ -303,34 +303,42 @@ function escapeHtml(str) {
 // ---------------------------------------------------------------------
 
 const PAGE_STYLE = `
-  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap');
-  :root{--bg:#0b0221;--panel:#170a3b;--border:#4a3591;--border-bright:#7c5cff;--text:#f2eaff;--muted:#a996d6;--pink:#ff3ec8;--cyan:#2ef7ff;}
+  @import url('https://fonts.googleapis.com/css2?family=Michroma&family=Exo+2:ital,wght@0,400;0,600;1,400&display=swap');
+  :root{color-scheme:dark;--bg:#000;--panel:#0a0b0e;--panel-soft:#101217;--border:#272b33;--text:#f3f4f6;--muted:#9aa1ab;--gold:#ffd60a;--gold-bright:#ffe96b;--gold-deep:#e8a200;--silver:#c5cbd3;--ice:#9fd8ff;--danger:#ff6b6b;--cut:18px;--cut-in:calc(var(--cut) - .586px);}
   *{box-sizing:border-box;}
-  body{margin:0;min-height:100vh;background:linear-gradient(180deg,#17023f,#0b0221 45%,#05010f);color:var(--text);font-family:'VT323',monospace;font-size:1.25rem;display:flex;align-items:flex-start;justify-content:center;padding:3rem 1.25rem;}
-  .panel{max-width:30rem;width:100%;background:var(--panel);border:1px solid var(--border-bright);box-shadow:0 0 24px rgba(124,92,255,.35);border-radius:.5rem;padding:2rem;}
+  body{margin:0;min-height:100vh;background:radial-gradient(ellipse 60% 38% at 50% -4%,rgba(255,214,10,.16),transparent 70%),radial-gradient(ellipse 70% 28% at 50% 108%,rgba(255,214,10,.1),transparent 70%),var(--bg);background-attachment:fixed;color:var(--text);font-family:'Exo 2',system-ui,sans-serif;font-size:1.05rem;line-height:1.6;display:flex;align-items:flex-start;justify-content:center;padding:3rem 1.25rem;}
+  .panel{position:relative;isolation:isolate;max-width:30rem;width:100%;padding:2rem;background:linear-gradient(135deg,rgba(197,203,211,.5),rgba(197,203,211,.12) 45%,rgba(255,214,10,.9));clip-path:polygon(0 0,calc(100% - var(--cut)) 0,100% var(--cut),100% 100%,var(--cut) 100%,0 calc(100% - var(--cut)));}
+  .panel::before{content:'';position:absolute;inset:1px;z-index:-1;background:linear-gradient(160deg,var(--panel-soft),var(--panel));clip-path:polygon(0 0,calc(100% - var(--cut-in)) 0,100% var(--cut-in),100% 100%,var(--cut-in) 100%,0 calc(100% - var(--cut-in)));}
   .panel.wide{max-width:42rem;}
-  h1{font-family:'Press Start 2P',monospace;font-size:1.1rem;color:var(--cyan);text-shadow:0 0 6px rgba(46,247,255,.5);margin:0;}
-  label{display:block;font-size:1rem;color:var(--muted);margin:1.1rem 0 .3rem;text-transform:uppercase;letter-spacing:.03em;}
+  .logo{display:block;height:3.5rem;width:auto;margin:0 0 1.25rem;mix-blend-mode:screen;}
+  h1{font-family:'Michroma',sans-serif;font-weight:400;font-size:1rem;letter-spacing:.02em;color:#fff;margin:0;}
+  h1::after{content:'';display:block;width:3rem;height:3px;margin-top:.7rem;background:linear-gradient(90deg,var(--gold-bright),var(--gold-deep));box-shadow:0 0 12px rgba(255,214,10,.7);transform:skewX(-35deg);transform-origin:left;}
+  .panel > h1{margin-bottom:1.2rem;}
+  label{display:block;font-family:'Michroma',sans-serif;font-size:.58rem;color:var(--silver);margin:1.3rem 0 .4rem;text-transform:uppercase;letter-spacing:.16em;}
   input[type=text],input[type=password],input[type=date],input[type=url],textarea,select{
-    width:100%;background:#05010f;border:1px solid var(--border);color:var(--text);
-    font-family:'VT323',monospace;font-size:1.15rem;padding:.6rem .7rem;border-radius:.3rem;
+    width:100%;background:#050608;border:1px solid var(--border);color:var(--text);
+    font-family:'Exo 2',system-ui,sans-serif;font-size:1rem;padding:.65rem .75rem;border-radius:2px;
   }
-  input:focus,textarea:focus,select:focus{outline:none;border-color:var(--cyan);box-shadow:0 0 8px rgba(46,247,255,.4);}
-  textarea{min-height:16rem;resize:vertical;font-family:ui-monospace,'VT323',monospace;font-size:1.05rem;}
+  input:focus,textarea:focus,select:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 1px var(--gold),0 0 14px rgba(255,214,10,.25);}
+  textarea{min-height:16rem;resize:vertical;font-family:ui-monospace,'SFMono-Regular',Menlo,Consolas,monospace;font-size:.95rem;}
   .row{display:flex;gap:1rem;}
   .row > div{flex:1;}
-  .checkbox-row{display:flex;align-items:center;gap:.5rem;margin-top:1.1rem;}
-  .checkbox-row input{width:auto;}
-  .checkbox-row label{margin:0;text-transform:none;}
-  button{font-family:'Press Start 2P',monospace;font-size:.7rem;background:transparent;color:var(--pink);border:1px solid var(--pink);border-radius:.3rem;padding:.8rem 1.2rem;margin-top:1.6rem;cursor:pointer;text-transform:uppercase;}
-  button:hover{color:#05010f;background:var(--pink);box-shadow:0 0 16px rgba(255,62,200,.6);}
-  .error{color:var(--pink);background:rgba(255,62,200,.08);border:1px solid var(--pink);border-radius:.3rem;padding:.75rem 1rem;margin-bottom:1rem;font-size:1.05rem;}
-  .success{color:var(--cyan);background:rgba(46,247,255,.08);border:1px solid var(--cyan);border-radius:.3rem;padding:.75rem 1rem;margin-bottom:1rem;font-size:1.05rem;}
-  .success code{background:#05010f;padding:.1em .4em;border-radius:.2rem;}
+  .checkbox-row{display:flex;align-items:center;gap:.5rem;margin-top:1.3rem;}
+  .checkbox-row input{width:auto;accent-color:var(--gold);}
+  .checkbox-row label{margin:0;text-transform:none;font-family:'Exo 2',system-ui,sans-serif;font-size:.95rem;letter-spacing:0;color:var(--muted);}
+  button{font-family:'Michroma',sans-serif;font-size:.62rem;letter-spacing:.18em;text-transform:uppercase;background:linear-gradient(135deg,var(--gold-bright),var(--gold-deep));color:#000;border:0;padding:.9rem 1.5rem;margin-top:1.6rem;cursor:pointer;clip-path:polygon(0 0,calc(100% - 9px) 0,100% 9px,100% 100%,9px 100%,0 calc(100% - 9px));}
+  button:hover{filter:brightness(1.12);}
+  button:focus-visible{outline:2px solid var(--gold);outline-offset:3px;}
+  .error{color:var(--danger);background:rgba(255,107,107,.08);border:1px solid var(--danger);border-left-width:3px;border-radius:2px;padding:.75rem 1rem;margin-bottom:1rem;font-size:1rem;}
+  .success{color:var(--ice);background:rgba(159,216,255,.08);border:1px solid var(--ice);border-left-width:3px;border-radius:2px;padding:.75rem 1rem;margin-bottom:1rem;font-size:1rem;}
+  .success code{background:#050608;padding:.1em .4em;border-radius:2px;}
   .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:1.25rem;}
   .topbar form{margin:0;}
-  .topbar button{margin:0;font-size:.55rem;padding:.5rem .8rem;}
-  a{color:var(--cyan);}
+  .topbar button{margin:0;font-size:.5rem;padding:.6rem 1rem;background:rgba(255,214,10,.1);color:var(--gold);}
+  .topbar button:hover{background:var(--gold);color:#000;filter:none;}
+  a{color:var(--gold);}
+  a:hover{color:#fff;}
+  @media (max-width:560px){.row{flex-direction:column;gap:0;}}
 `;
 
 function renderLogin(error) {
@@ -343,6 +351,7 @@ function renderLogin(error) {
 <style>${PAGE_STYLE}</style>
 </head><body>
 <div class="panel">
+  <img class="logo" src="/logo-lockup.webp" alt="troyco.space" width="760" height="245">
   <h1>Admin Login</h1>
   ${error ? `<div class="error">${escapeHtml(error)}</div>` : ''}
   <form method="POST" action="/admin/login">
