@@ -1,11 +1,14 @@
 ---
-import { SITE_TITLE } from '../consts';
+import { SITE_TITLE, SITE_TAGLINE } from '../consts';
 const year = new Date().getFullYear();
 ---
 
 <footer class="site-footer">
   <div class="wrap">
-    <span>&copy; {year} {SITE_TITLE}</span>
-    <a href="/rss.xml">RSS</a>
+    <p class="tagline"><span>{SITE_TAGLINE}</span></p>
+    <div class="footer-row">
+      <span>&copy; {year} {SITE_TITLE}</span>
+      <a href="/rss.xml">RSS</a>
+    </div>
   </div>
 </footer>

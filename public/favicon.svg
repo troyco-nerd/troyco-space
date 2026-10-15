@@ -1,4 +1,30 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="14" fill="#7c3aed"/>
-  <text x="32" y="43" font-family="ui-sans-serif, system-ui, sans-serif" font-size="30" font-weight="700" fill="#ffffff" text-anchor="middle">T</text>
+  <defs>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff27a"/>
+      <stop offset="1" stop-color="#f2b200"/>
+    </linearGradient>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#06122b"/>
+      <stop offset="1" stop-color="#14508f"/>
+    </linearGradient>
+    <clipPath id="portal">
+      <polygon points="32,12 22.1,54 41.9,54"/>
+    </clipPath>
+  </defs>
+  <rect width="64" height="64" rx="13" fill="#000"/>
+  <g transform="translate(32 32) scale(.88) translate(-32 -32)">
+    <!-- two gold chevrons -->
+    <polygon fill="url(#gold)" points="3,10 13,10 17,34 21,10 31,10 21,54 13,54"/>
+    <polygon fill="url(#gold)" points="33,10 43,10 47,34 51,10 61,10 51,54 43,54"/>
+    <!-- silver triangles nested in each chevron -->
+    <polygon fill="#c5cbd3" points="14.6,10 19.4,10 17,25"/>
+    <polygon fill="#c5cbd3" points="44.6,10 49.4,10 47,25"/>
+    <!-- sky portal between the chevrons, with rising sun -->
+    <polygon fill="url(#sky)" points="32,12 22.1,54 41.9,54"/>
+    <g clip-path="url(#portal)">
+      <circle cx="32" cy="54" r="10" fill="url(#gold)"/>
+    </g>
+    <path fill="#fff" d="M32 20 33.1 25.4 38.5 26.5 33.1 27.6 32 33 30.9 27.6 25.5 26.5 30.9 25.4Z"/>
+  </g>
 </svg>
