@@ -5,5 +5,13 @@
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS"
-  }
+  },
+  // Private visitor stats (see worker/stats.js). No database ID on purpose:
+  // Cloudflare creates this database the first time the site deploys.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "troyco-stats"
+    }
+  ]
 }
